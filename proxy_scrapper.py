@@ -24,12 +24,12 @@ def get_list_content(url):
     try:
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
-            logger.info(f"Got response from {url}")
+            logger.info(f"Got response from proxy list: {url}")
             return response.text
     except:
         pass
 
-    logger.error(f"Failed to get response from {url}")
+    logger.error(f"Failed to get response from proxy list: {url}")
     return None
 
 def parse_ips(text):

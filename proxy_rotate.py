@@ -3,13 +3,16 @@ Wrapper function for rotating proxies, handles requests and returns response, if
 """
 
 import os
-import requests
 import json
+import requests
+from logconfig import get_logger
 
 CURRENT_DIR = os.path.dirname(__file__)
 CACHE_DIR = os.path.join(CURRENT_DIR, 'cache')
 HTTP_PROXIES = []
 SOCKS_PROXIES = []
+
+logger = get_logger('proxy_rotate')
 
 # keep track of working ips for url
 working_ip_cache = []
@@ -68,9 +71,9 @@ def get_proxy( type, url, cache ):
 
     return None
 
-def proxy_request(url, type, method, params, headers, retries=5, cache=True):
-    while proxy := get_proxy(type, url, cache):
-        for i in range(retries):
+def proxy_request(url, type, method, params, headers, retries=3, cache=True):
+    while proxy := get_proxy(type, url, cache): # iterate until we get a working proxy
+        for i in range(retries): # retry same proxy
             try:
                 proxies = {}
 
@@ -85,19 +88,28 @@ def proxy_request(url, type, method, params, headers, retries=5, cache=True):
                         proxies['http'] = f'{protocol}://{proxy["ip"]}'
                         proxies['https'] = f'{protocol}://{proxy["ip"]}'
 
+                logger.info(f"Requesting {url} with proxy {proxy['ip']} type {type}")
+
                 response = requests.request(method, url, params=params, headers=headers, proxies=proxies, timeout=15)
+
+                 # add to working cache
                 if response.ok:
+                    logger.info(f"Request success with proxy {proxy['ip']}, retry count: {i}")
+
                     if not is_in_cache( proxy, type, url, working_ip_cache ):
                         working_ip_cache.append( [ proxy , type, url ] )
                         return response
 
-                # check if last retry
-                if i == retries - 1:
-                    if not is_in_cache( proxy, type, url, not_working_ip_cache ):
-                        not_working_ip_cache.append( proxy )
-
             except Exception as e:
-                print(f"Request failed with proxy {proxy['ip']}, retrying {i+1}/{retries}")
+                logger.info(f"Request failed with proxy {proxy['ip']}, retrying {i+1}/{retries}")
+
+            # check if last retry
+            if i == retries - 1:
+                # add to not working cache
+                if not is_in_cache( proxy, type, url, not_working_ip_cache ):
+                    not_working_ip_cache.append( [ proxy , type, url ] )
+
+                logger.info(f"Proxy {proxy['ip']} failed, removing from list")
 
     return None
 
