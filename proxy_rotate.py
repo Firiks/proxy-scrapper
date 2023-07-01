@@ -30,13 +30,17 @@ def is_in_cache( proxy, type, url, cache_list ):
 def load_proxies(type):
     with open(os.path.join(CACHE_DIR, f'{type}_proxies.json'), 'r') as f:
         proxies = json.load(f)
+
+        if not proxies:
+            logger.warning(f"No {type} proxies found")
+
         return proxies
 
 def get_proxy( type, url, cache ):
     # check if we have a working proxy for this url
     if cache and working_ip_cache:
         for proxy in working_ip_cache:
-            if proxy['type'] == type and proxy['url'] == url:
+            if proxy[1] == type and proxy[2] == url:
                 return proxy
 
     global HTTP_PROXIES
@@ -71,7 +75,7 @@ def get_proxy( type, url, cache ):
 
     return None
 
-def proxy_request(url, type, method, params, headers, retries=3, cache=True):
+def proxy_request(url, type, method, params, headers, retries=3, cache=True, timeout=15):
     while proxy := get_proxy(type, url, cache): # iterate until we get a working proxy
         for i in range(retries): # retry same proxy
             try:
@@ -90,7 +94,7 @@ def proxy_request(url, type, method, params, headers, retries=3, cache=True):
 
                 logger.info(f"Requesting {url} with proxy {proxy['ip']} type {type}")
 
-                response = requests.request(method, url, params=params, headers=headers, proxies=proxies, timeout=15)
+                response = requests.request(method, url, params=params, headers=headers, proxies=proxies, timeout=timeout)
 
                  # add to working cache
                 if response.ok:
@@ -101,7 +105,7 @@ def proxy_request(url, type, method, params, headers, retries=3, cache=True):
                         return response
 
             except Exception as e:
-                logger.info(f"Request failed with proxy {proxy['ip']}, retrying {i+1}/{retries}")
+                logger.info(f"Request failed with proxy {proxy['ip']}, error: {e}")
 
             # check if last retry
             if i == retries - 1:
@@ -109,7 +113,10 @@ def proxy_request(url, type, method, params, headers, retries=3, cache=True):
                 if not is_in_cache( proxy, type, url, not_working_ip_cache ):
                     not_working_ip_cache.append( [ proxy , type, url ] )
 
-                logger.info(f"Proxy {proxy['ip']} failed, removing from list")
+                logger.info(f"Last retry for proxy {proxy['ip']} failed, removing from list")
+
+            else:
+                logger.info(f"Retrying for ip {proxy['ip']}, retry: {i+1}/{retries}")
 
     return None
 
